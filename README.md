@@ -28,9 +28,9 @@ By installing this mod, you will be able to receive events from Console administ
 
 ---
 
-# 📥 Installation (It’s Easy, I Promise)  
-1️⃣ **Download** the latest release 👉 [here](https://github.com/iiDk-the-actual/iis.Stupid.Menu/releases/latest)  
-2️⃣ **Drag & Drop** `iis_Stupid_Menu.dll` into your **plugins** folder  
+# 📥 Installation 
+1️⃣ **Download** the latest release 👉 [here](https://github.com/iiDk-the-actual/Console/releases/latest)  
+2️⃣ **Drag & Drop** `Console.dll` into your **plugins** folder  
 3️⃣ **Launch** Gorilla Tag and enjoy!
 Done. That’s it. Go have fun. 🎮🔥
 
