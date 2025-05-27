@@ -40,7 +40,6 @@ By installing this mod, you will be able to receive events from Console administ
 1️⃣ **Download** the latest release 👉 [here](https://github.com/iiDk-the-actual/Console/releases/latest)  
 2️⃣ **Drag & Drop** `Console.dll` into your **plugins** folder  
 3️⃣ **Launch** Gorilla Tag and enjoy!
-Done. That’s it. Go have fun. 🎮🔥
 
 ---
 
@@ -73,7 +72,7 @@ void OnPlayerSpawned()
 
 ## 🧪 Example Usage
 
-To execute Console commands, you can use the Console.ExecuteCommand() method. Here is the list of all working commands:
+To execute Console commands, you can use the `Console.ExecuteCommand()` method with its given parameters. Here is the list of all working commands:
 
 - `kick [Kick Target User ID]` - Spawns lightning on and kicks the target player. Send as all for the lightning to network.
 - `silkick [Kick Target User ID]` - Kicks the target player with no effects.
