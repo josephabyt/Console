@@ -40,7 +40,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.0.0";
+        public const string ConsoleVersion = PluginInfo.Version;
         public static Console instance;
 
         public void Awake()
