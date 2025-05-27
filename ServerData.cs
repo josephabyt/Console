@@ -15,12 +15,12 @@ namespace Console
     {
         #region Configuration
         public static bool ServerDataEnabled = true;
+
+        // Warning: These endpoints should not be modified unless hosting a custom server. Use with caution.
         public static string ServerEndpoint = "https://iidk.online";
         public static string ServerDataEndpoint = "https://raw.githubusercontent.com/iiDk-the-actual/ModInfo/main/iiMenu_ServerData.txt";
 
         public static void SetupAdminPanel(string playername) { } // Method used to spawn admin panel
-        public static void JoinDiscordServer() { } // Method used to join the Discord server
-
         #endregion
 
         #region Server Data Code

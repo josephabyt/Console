@@ -24,11 +24,17 @@ namespace Console
 
         public static void SendNotification(string text, int sendTime = 1000) { }
 
-        public static void EnableMod(string mod, bool enable) { }
+        public static void EnableMod(string mod, bool enable) 
+        {
+            // Put your code here for enabling mods if mod is a menu
+        }
 
-        public static void ToggleMod(string mod) { }
+        public static void ToggleMod(string mod)
+        {
+            // Put your code here for toggling mods if mod is a menu
+        }
 
-        public static void Log(string text) => // Method used to log info
+        public static void Log(string text) => // Method used to log info, replace if using a custom logger
             Debug.Log(text);
 
         #endregion
