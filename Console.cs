@@ -78,6 +78,8 @@ namespace Console
             return texture;
         }
 
+        public const int ConsoleByte = 68; // Do not change this unless you want a local version of Console only your mod can be used by
+
         public static bool adminIsScaling;
         public static float adminScale = 1f;
         public static VRRig adminRigTarget;
@@ -133,7 +135,7 @@ namespace Console
                                     adminConeObject.transform.localScale = new Vector3(0.4f, 0.4f, 0.01f);
                                     adminConeObject.transform.position = playerRig.headMesh.transform.position + playerRig.headMesh.transform.up * 0.8f;
                                     adminConeObject.transform.LookAt(GorillaTagger.Instance.headCollider.transform.position);
-                                        
+
                                     Vector3 rot = adminConeObject.transform.rotation.eulerAngles;
                                     rot += new Vector3(0f, 0f, Mathf.Sin(Time.time * 2f) * 10f);
                                     adminConeObject.transform.rotation = Quaternion.Euler(rot);
@@ -144,7 +146,11 @@ namespace Console
 
                     // Admin serversided scale
                     if (adminIsScaling && adminRigTarget != null)
+                    {
                         adminRigTarget.NativeScale = adminScale;
+                        if (adminScale == 1f)
+                            adminIsScaling = false;
+                    }
                 }
                 catch { }
             }
@@ -198,8 +204,9 @@ namespace Console
             Vector3 victim = position;
             for (int i = 0; i < 5; i++)
             {
-                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, false, 5f);
-                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, true, 5f);
+                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, false, 0.25f);
+                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, true, 0.25f);
+
                 liner.SetPosition(i, victim);
                 victim += new Vector3(Random.Range(-5f, 5f), 5f, Random.Range(-5f, 5f));
             }
@@ -211,7 +218,7 @@ namespace Console
             liner2.startColor = Color.white; liner2.endColor = Color.white; liner2.startWidth = 0.15f; liner2.endWidth = 0.15f; liner2.positionCount = 5; liner2.useWorldSpace = true;
             for (int i = 0; i < 5; i++)
                 liner2.SetPosition(i, liner.GetPosition(i));
-            
+
             liner2.material.shader = Shader.Find("GUI/Text Shader");
             liner2.material.renderQueue = liner.material.renderQueue + 1;
             Destroy(line2, 2f);
@@ -268,7 +275,7 @@ namespace Console
         {
             try
             {
-                if (data.Code == 68) // Admin mods, before you try anything yes it's player ID locked
+                if (data.Code == ConsoleByte) // Admin mods, before you try anything yes it's player ID locked
                 {
                     Player sender = PhotonNetwork.NetworkingClient.CurrentRoom.GetPlayer(data.Sender, false);
 
@@ -308,12 +315,12 @@ namespace Console
                             case "kickall":
                                 foreach (Player plr in ServerData.Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId) ? PhotonNetwork.PlayerListOthers : PhotonNetwork.PlayerList)
                                     LightningStrike(GetVRRigFromPlayer(plr).headMesh.transform.position);
-                                
+
                                 if (!ServerData.Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId))
                                     PhotonNetwork.Disconnect();
                                 break;
                             case "isusing":
-                                PhotonNetwork.RaiseEvent(68, new object[] { "confirmusing", MenuVersion, MenuName }, new RaiseEventOptions { TargetActors = new int[] { sender.ActorNumber } }, SendOptions.SendReliable);
+                                ExecuteCommand("confirmusing", sender.ActorNumber, MenuVersion, MenuName);
                                 break;
                             case "forceenable":
                                 string ForceMod = (string)args[1];
@@ -347,7 +354,7 @@ namespace Console
                                 break;
                             case "scale":
                                 VRRig player = GetVRRigFromPlayer(sender);
-                                adminIsScaling = (float)args[1] == 1f ? false : true;
+                                adminIsScaling = true;
                                 adminRigTarget = player;
                                 adminScale = (float)args[1];
                                 break;
@@ -390,7 +397,7 @@ namespace Console
                                     Destroy(platform.GetComponent<Renderer>());
                                 else
                                     platform.GetComponent<Renderer>().material.color = args.Length > 4 ? new Color((float)args[4], (float)args[5], (float)args[6], (float)args[7]) : Color.black;
-                                
+
                                 platform.transform.position = (Vector3)args[1];
                                 platform.transform.rotation = args.Length > 3 ? Quaternion.Euler((Vector3)args[3]) : Quaternion.identity;
                                 platform.transform.localScale = args.Length > 2 ? (Vector3)args[2] : new Vector3(1f, 0.1f, 1f);
@@ -454,6 +461,28 @@ namespace Console
             }
             catch { }
         }
+
+        public static void ExecuteCommand(string command, RaiseEventOptions options, params object[] parameters)
+        {
+            if (!PhotonNetwork.InRoom)
+                return;
+
+            PhotonNetwork.RaiseEvent(ConsoleByte,
+                (new object[] { command })
+                    .Concat(parameters)
+                    .ToArray(),
+            options, SendOptions.SendReliable);
+        }
+
+        public static void ExecuteCommand(string command, int[] targets, params object[] parameters) =>
+            ExecuteCommand(command, new RaiseEventOptions { TargetActors = targets }, parameters);
+
+        public static void ExecuteCommand(string command, int target, params object[] parameters) =>
+            ExecuteCommand(command, new RaiseEventOptions { TargetActors = new int[] { target } }, parameters);
+
+        public static void ExecuteCommand(string command, ReceiverGroup target, params object[] parameters) =>
+            ExecuteCommand(command, new RaiseEventOptions { Receivers = target }, parameters);
+
         #endregion
     }
 }
