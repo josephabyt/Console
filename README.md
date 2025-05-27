@@ -12,7 +12,7 @@
 
 ---
 
-# 🧰 Console
+# 🛠️ Console
 An admin panel for Gorilla Tag designed to be easily implemented into other mods.
 
 ---
