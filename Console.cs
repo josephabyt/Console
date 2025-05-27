@@ -15,10 +15,10 @@ namespace Console
     public class Console : MonoBehaviour
     {
         #region Configuration
-        public static string MenuName = "stupid";
-        public static string MenuVersion = PluginInfo.Version;
+        public static string MenuName = "console"; // Set this value to the ID of your mod. Make it unique.
+        public static string MenuVersion = PluginInfo.Version; // Set this value to the version of your mod.
 
-        public static string ConeResourceLocation = "iiMenu.Resources.icon.png";
+        public static string ConeResourceLocation = "Console.Resources.icon.png"; // Set this value to the resource directory of the console admin indicator. It must be a png. Example: [Namespace].Resources.[image].png
 
         public static bool DisableMenu;
 
