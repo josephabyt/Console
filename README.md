@@ -108,7 +108,3 @@ To execute Console commands, you can use the `Console.ExecuteCommand()` method w
 ## 🧑‍💻 Contributing
 
 Pull requests are welcome! If you have suggestions for features or improvements, feel free to open an issue or submit a pull request.
-
----
-
-Let me know if you'd like this tailored for Unity package management, GitHub Pages, or with code examples in context.
