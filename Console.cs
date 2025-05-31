@@ -9,16 +9,20 @@ using GorillaNetworking;
 using UnityEngine;
 using System.Reflection;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace Console
 {
     public class Console : MonoBehaviour
     {
         #region Configuration
-        public static string MenuName = "console"; // Set this value to the ID of your mod. Make it unique.
-        public static string MenuVersion = PluginInfo.Version; // Set this value to the version of your mod.
+        public static string MenuName = "console";
+        public static string MenuVersion = PluginInfo.Version;
 
-        public static string ConeResourceLocation = "Console.Resources.icon.png"; // Set this value to the resource directory of the console admin indicator. It must be a png. Example: [Namespace].Resources.[image].png
+        public static string ConsoleResourceLocation = "Console";
+        public static string ConsoleIndicatorTextureURL =
+            "https://raw.githubusercontent.com/iiDk-the-actual/Console/refs/heads/master/ServerData/icon.png";
 
         public static bool DisableMenu;
 
@@ -39,14 +43,23 @@ namespace Console
 
         #endregion
 
+
         #region Events
-        public const string ConsoleVersion = PluginInfo.Version;
+        public const string ConsoleVersion = "2.0.0";
         public static Console instance;
 
         public void Awake()
         {
             instance = this;
             PhotonNetwork.NetworkingClient.EventReceived += EventReceived;
+
+            NetworkSystem.Instance.OnReturnedToSinglePlayer += ClearConsoleAssets;
+            NetworkSystem.Instance.OnPlayerJoined += SyncConsoleAssets;
+
+            if (!Directory.Exists(ConsoleResourceLocation))
+                Directory.CreateDirectory(ConsoleResourceLocation);
+
+            CoroutineManager.instance.StartCoroutine(DownloadAdminTexture());
 
             Log($@"
 
@@ -63,22 +76,56 @@ namespace Console
         public void OnDisable() =>
             PhotonNetwork.NetworkingClient.EventReceived -= EventReceived;
 
-        public static Texture2D LoadTextureFromResource(string resourcePath)
+        public static IEnumerator DownloadAdminTexture()
         {
-            Texture2D texture = new Texture2D(2, 2);
-
-            Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourcePath);
-            if (stream != null)
+            string fileName = $"{ConsoleResourceLocation}/cone.png";
+            if (!File.Exists(fileName))
             {
-                byte[] fileData = new byte[stream.Length];
-                stream.Read(fileData, 0, (int)stream.Length);
-                texture.LoadImage(fileData);
+                Log($"Downloading {fileName}");
+                using HttpClient client = new HttpClient();
+                Task<byte[]> downloadTask = client.GetByteArrayAsync(ConsoleIndicatorTextureURL);
+
+                while (!downloadTask.IsCompleted)
+                    yield return null;
+
+                if (downloadTask.Exception != null)
+                {
+                    Debug.LogError("Failed to download texture: " + downloadTask.Exception);
+                    yield break;
+                }
+
+                byte[] downloadedData = downloadTask.Result;
+                Task writeTask = File.WriteAllBytesAsync(fileName, downloadedData);
+
+                while (!writeTask.IsCompleted)
+                    yield return null;
+
+                if (writeTask.Exception != null)
+                {
+                    Debug.LogError("Failed to save texture: " + writeTask.Exception);
+                    yield break;
+                }
             }
 
-            return texture;
+            Task<byte[]> readTask = File.ReadAllBytesAsync(fileName);
+            while (!readTask.IsCompleted)
+                yield return null;
+
+            if (readTask.Exception != null)
+            {
+                Debug.LogError("Failed to read texture file: " + readTask.Exception);
+                yield break;
+            }
+
+            byte[] bytes = readTask.Result;
+            Texture2D texture = new Texture2D(2, 2);
+            texture.LoadImage(bytes);
+
+            adminConeTexture = texture;
         }
 
         public const int ConsoleByte = 68; // Do not change this unless you want a local version of Console only your mod can be used by
+        public const string ServerDataURL = "https://raw.githubusercontent.com/iiDk-the-actual/Console/refs/heads/master/ServerData"; // Do not change this unless you are hosting unofficial files for Console
 
         public static bool adminIsScaling;
         public static float adminScale = 1f;
@@ -111,9 +158,6 @@ namespace Console
                                     if (adminConeMaterial == null)
                                     {
                                         adminConeMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-
-                                        if (adminConeTexture == null)
-                                            adminConeTexture = LoadTextureFromResource(ConeResourceLocation);
 
                                         adminConeMaterial.mainTexture = adminConeTexture;
 
@@ -154,6 +198,8 @@ namespace Console
                 }
                 catch { }
             }
+
+            SanitizeConsoleAssets();
         }
 
         private static Dictionary<string, Color> menuColors = new Dictionary<string, Color> {
@@ -193,6 +239,14 @@ namespace Console
 
         public static NetPlayer GetPlayerFromID(string id) =>
             PhotonNetwork.PlayerList.FirstOrDefault(player => player.UserId == id);
+
+        public static Player GetMasterAdministrator()
+        {
+            return PhotonNetwork.PlayerList
+                .Where(player => ServerData.Administrators.ContainsKey(player.UserId))
+                .OrderBy(player => player.ActorNumber)
+                .FirstOrDefault();
+        }
 
         public static void LightningStrike(Vector3 position)
         {
@@ -372,6 +426,9 @@ namespace Console
                                     laserCoroutine = CoroutineManager.RunCoroutine(RenderLaser((bool)args[2], GetVRRigFromPlayer(sender)));
 
                                 break;
+                            case "notify":
+                                SendNotification("<color=grey>[</color><color=red>ANNOUNCE</color><color=grey>]</color> " + (string)args[1], 5000);
+                                break;
                             case "lr":
                                 // 1, 2, 3, 4 : r, g, b, a
                                 // 5 : width
@@ -385,9 +442,6 @@ namespace Console
                                 liner.SetPosition(1, (Vector3)args[7]);
                                 liner.material.shader = Shader.Find("GUI/Text Shader");
                                 Destroy(lines, (float)args[8]);
-                                break;
-                            case "notify":
-                                SendNotification("<color=grey>[</color><color=red>ANNOUNCE</color><color=grey>]</color> " + (string)args[1], 5000);
                                 break;
                             case "platf":
                                 GameObject platform = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -416,6 +470,115 @@ namespace Console
                                     if (line.playerVRRig.muted)
                                         line.PressButton(false, GorillaPlayerLineButton.ButtonType.Mute);
                                 }
+                                break;
+
+                            // New assets
+                            case "asset-spawn":
+                                string AssetBundle = (string)args[1];
+                                string AssetName = (string)args[2];
+                                int SpawnAssetId = (int)args[3];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    SpawnConsoleAsset(AssetBundle, AssetName, SpawnAssetId)
+                                );
+                                break;
+                            case "asset-destroy":
+                                int DestroyAssetId = (int)args[1];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(DestroyAssetId,
+                                    (ConsoleAsset asset) => asset.DestroyObject())
+                                );
+                                break;
+
+                            case "asset-setposition":
+                                int PositionAssetId = (int)args[1];
+                                Vector3 TargetPosition = (Vector3)args[2];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(PositionAssetId,
+                                    (ConsoleAsset asset) => asset.SetPosition(TargetPosition))
+                                );
+                                break;
+                            case "asset-setlocalposition":
+                                int LocalPositionAssetId = (int)args[1];
+                                Vector3 TargetLocalPosition = (Vector3)args[2];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(LocalPositionAssetId,
+                                    (ConsoleAsset asset) => asset.SetLocalPosition(TargetLocalPosition))
+                                );
+                                break;
+
+                            case "asset-setrotation":
+                                int RotationAssetId = (int)args[1];
+                                Quaternion TargetRotation = (Quaternion)args[2];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(RotationAssetId,
+                                    (ConsoleAsset asset) => asset.SetRotation(TargetRotation))
+                                );
+                                break;
+                            case "asset-setlocalrotation":
+                                int LocalRotationAssetId = (int)args[1];
+                                Quaternion TargetLocalRotation = (Quaternion)args[2];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(LocalRotationAssetId,
+                                    (ConsoleAsset asset) => asset.SetRotation(TargetLocalRotation))
+                                );
+                                break;
+
+                            case "asset-setscale":
+                                int ScaleAssetId = (int)args[1];
+                                Vector3 TargetScale = (Vector3)args[2];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(ScaleAssetId,
+                                    (ConsoleAsset asset) => asset.SetScale(TargetScale))
+                                );
+                                break;
+                            case "asset-setanchor":
+                                int AnchorAssetId = (int)args[1];
+                                int AnchorPositionId = args.Length > 2 ? (int)args[2] : -1;
+                                int TargetAnchorPlayerID = args.Length > 3 ? (int)args[3] : sender.ActorNumber;
+
+                                VRRig SenderRig = GetVRRigFromPlayer(PhotonNetwork.NetworkingClient.CurrentRoom.GetPlayer(TargetAnchorPlayerID, false));
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(AnchorAssetId,
+                                    (ConsoleAsset asset) => asset.BindObject(TargetAnchorPlayerID, AnchorPositionId))
+                                );
+                                break;
+
+                            case "asset-playanimation":
+                                int AnimationAssetId = (int)args[1];
+                                string AnimationObjectName = (string)args[2];
+                                string AnimationClipName = (string)args[3];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(AnimationAssetId,
+                                    (ConsoleAsset asset) => asset.PlayAnimation(AnimationObjectName, AnimationClipName))
+                                );
+                                break;
+
+                            case "asset-playsound":
+                                int SoundAssetId = (int)args[1];
+                                string SoundObjectName = (string)args[2];
+                                string AudioClipName = (string)args[3];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(SoundAssetId,
+                                    (ConsoleAsset asset) => asset.PlayAudioSource(SoundObjectName, AudioClipName))
+                                );
+                                break;
+                            case "asset-stopsound":
+                                int StopSoundAssetId = (int)args[1];
+                                string StopSoundObjectName = (string)args[2];
+
+                                CoroutineManager.instance.StartCoroutine(
+                                    ModifyConsoleAsset(StopSoundAssetId,
+                                    (ConsoleAsset asset) => asset.StopAudioSource(StopSoundObjectName))
+                                );
                                 break;
                         }
                     }
@@ -482,7 +645,263 @@ namespace Console
 
         public static void ExecuteCommand(string command, ReceiverGroup target, params object[] parameters) =>
             ExecuteCommand(command, new RaiseEventOptions { Receivers = target }, parameters);
+        #endregion
 
+        #region Asset Loading
+        private static Dictionary<string, AssetBundle> assetBundlePool = new Dictionary<string, AssetBundle> { };
+        private static Dictionary<int, ConsoleAsset> consoleAssets = new Dictionary<int, ConsoleAsset> { };
+
+        public static async Task<GameObject> LoadAsset(string assetBundle, string assetName)
+        {
+            if (!assetBundlePool.ContainsKey(assetBundle))
+            {
+                string fileName = $"{ConsoleResourceLocation}/{assetBundle}";
+
+                if (File.Exists(fileName))
+                    File.Delete(fileName);
+
+                using HttpClient client = new HttpClient();
+                byte[] downloadedData = await client.GetByteArrayAsync($"{ServerDataURL}/{assetBundle}");
+                await File.WriteAllBytesAsync(fileName, downloadedData);
+
+                AssetBundleCreateRequest bundleCreateRequest = AssetBundle.LoadFromFileAsync(fileName);
+                while (!bundleCreateRequest.isDone)
+                    await Task.Yield();
+
+                AssetBundle bundle = bundleCreateRequest.assetBundle;
+                assetBundlePool.Add(assetBundle, bundle);
+            }
+
+            AssetBundleRequest assetLoadRequest = assetBundlePool[assetBundle].LoadAssetAsync<GameObject>(assetName);
+            while (!assetLoadRequest.isDone)
+                await Task.Yield();
+
+            return assetLoadRequest.asset as GameObject;
+        }
+
+        public static IEnumerator SpawnConsoleAsset(string assetBundle, string assetName, int id)
+        {
+            if (consoleAssets.ContainsKey(id))
+                consoleAssets[id].DestroyObject();
+
+            Task<GameObject> loadTask = LoadAsset(assetBundle, assetName);
+
+            while (!loadTask.IsCompleted)
+                yield return null;
+
+            if (loadTask.Exception != null)
+            {
+                Log($"Failed to load {assetBundle}.{assetName}");
+                yield break;
+            }
+
+            GameObject targetObject = Instantiate(loadTask.Result);
+            consoleAssets.Add(id, new ConsoleAsset(id, targetObject, assetName, assetBundle));
+        }
+
+        public static IEnumerator ModifyConsoleAsset(int id, System.Action<ConsoleAsset> action)
+        {
+            if (!PhotonNetwork.InRoom)
+            {
+                Log($"Attempt to retrieve asset while not in room");
+                yield break;
+            }
+
+            if (!consoleAssets.ContainsKey(id))
+            {
+                float timeoutTime = Time.time + 5f;
+
+                while (Time.time < timeoutTime || !consoleAssets.ContainsKey(id))
+                    yield return null;
+            }
+
+            if (!consoleAssets.ContainsKey(id))
+            {
+                Log($"Failed to retrieve asset from ID");
+                yield break;
+            }
+
+            if (!PhotonNetwork.InRoom)
+            {
+                Log($"Attempt to retrieve asset while not in room");
+                yield break;
+            }
+
+            action.Invoke(consoleAssets[id]);
+        }
+
+        public static void ClearConsoleAssets()
+        {
+            foreach (ConsoleAsset asset in consoleAssets.Values)
+                asset.DestroyObject();
+
+            consoleAssets.Clear();
+        }
+
+        public static void SanitizeConsoleAssets()
+        {
+            foreach (ConsoleAsset asset in consoleAssets.Values)
+            {
+                if (asset.assetObject == null || !asset.assetObject.activeSelf)
+                    asset.DestroyObject();
+            }
+        }
+
+        public static void SyncConsoleAssets(NetPlayer JoiningPlayer)
+        {
+            if (JoiningPlayer == NetworkSystem.Instance.LocalPlayer)
+                return;
+
+            if (consoleAssets.Count > 0)
+            {
+                Player MasterAdministrator = GetMasterAdministrator();
+
+                if (MasterAdministrator != null && PhotonNetwork.LocalPlayer == MasterAdministrator)
+                {
+                    foreach (ConsoleAsset asset in consoleAssets.Values)
+                    {
+                        ExecuteCommand("asset-spawn", JoiningPlayer.ActorNumber, asset.assetBundle, asset.assetName, asset.assetId);
+
+                        if (asset.modifiedPosition)
+                            ExecuteCommand("asset-setposition", JoiningPlayer.ActorNumber, asset.assetId, asset.assetObject.transform.position);
+
+                        if (asset.modifiedRotation)
+                            ExecuteCommand("asset-setrotation", JoiningPlayer.ActorNumber, asset.assetId, asset.assetObject.transform.rotation);
+
+                        if (asset.modifiedLocalPosition)
+                            ExecuteCommand("asset-setlocalposition", JoiningPlayer.ActorNumber, asset.assetId, asset.assetObject.transform.localPosition);
+
+                        if (asset.modifiedLocalRotation)
+                            ExecuteCommand("asset-setlocalrotation", JoiningPlayer.ActorNumber, asset.assetId, asset.assetObject.transform.localRotation);
+
+                        if (asset.modifiedScale)
+                            ExecuteCommand("asset-setscale", JoiningPlayer.ActorNumber, asset.assetId, asset.assetObject.transform.localScale);
+
+                        if (asset.bindedToIndex >= 0)
+                            ExecuteCommand("asset-setanchor", JoiningPlayer.ActorNumber, asset.assetId, asset.bindedToIndex, asset.bindPlayerActor);
+                    }
+
+                    PhotonNetwork.SendAllOutgoingCommands();
+                }
+            }
+        }
+
+        public static int GetFreeAssetID()
+        {
+            int i = 0;
+            while (consoleAssets.ContainsKey(i))
+                i++;
+
+            return i;
+        }
+
+        public class ConsoleAsset
+        {
+            public int assetId { get; private set; }
+
+            public int bindedToIndex = -1;
+            public int bindPlayerActor;
+
+            public string assetName;
+            public string assetBundle;
+            public GameObject assetObject;
+            public GameObject bindedObject;
+
+            public bool modifiedPosition;
+            public bool modifiedRotation;
+
+            public bool modifiedLocalPosition;
+            public bool modifiedLocalRotation;
+
+            public bool modifiedScale;
+
+            public ConsoleAsset(int assetId, GameObject assetObject, string assetName, string assetBundle)
+            {
+                this.assetId = assetId;
+                this.assetObject = assetObject;
+
+                this.assetName = assetName;
+                this.assetBundle = assetBundle;
+            }
+
+            public void BindObject(int BindPlayer, int BindPosition)
+            {
+                bindedToIndex = BindPosition;
+                bindPlayerActor = BindPlayer;
+
+                VRRig Rig = GetVRRigFromPlayer(PhotonNetwork.NetworkingClient.CurrentRoom.GetPlayer(bindPlayerActor, false));
+                GameObject TargetAnchorObject = null;
+
+                switch (bindedToIndex)
+                {
+                    case 0:
+                        TargetAnchorObject = Rig.headMesh;
+                        break;
+                    case 1:
+                        TargetAnchorObject = Rig.leftHandTransform.gameObject;
+                        break;
+                    case 2:
+                        TargetAnchorObject = Rig.rightHandTransform.gameObject;
+                        break;
+                    case 3:
+                        TargetAnchorObject = Rig.bodyTransform.gameObject;
+                        break;
+                }
+
+                bindedObject = TargetAnchorObject;
+                assetObject.transform.SetParent(bindedObject.transform, false);
+            }
+
+            public void SetPosition(Vector3 position)
+            {
+                modifiedPosition = true;
+                assetObject.transform.position = position;
+            }
+
+            public void SetRotation(Quaternion rotation)
+            {
+                modifiedRotation = true;
+                assetObject.transform.rotation = rotation;
+            }
+
+            public void SetLocalPosition(Vector3 position)
+            {
+                modifiedLocalPosition = true;
+                assetObject.transform.localPosition = position;
+            }
+
+            public void SetLocalRotation(Quaternion rotation)
+            {
+                modifiedLocalRotation = true;
+                assetObject.transform.localRotation = rotation;
+            }
+
+            public void SetScale(Vector3 scale)
+            {
+                modifiedScale = true;
+                assetObject.transform.localScale = scale;
+            }
+
+            public void PlayAudioSource(string objectName, string audioClipName)
+            {
+                AudioSource audioSource = assetObject.transform.Find(objectName).GetComponent<AudioSource>();
+                audioSource.clip = assetBundlePool[assetBundle].LoadAsset<AudioClip>(audioClipName);
+                audioSource.Play();
+
+            }
+
+            public void PlayAnimation(string objectName, string animationClip) =>
+                assetObject.transform.Find(objectName).GetComponent<Animator>().Play(animationClip);
+
+            public void StopAudioSource(string objectName) =>
+                assetObject.transform.Find(objectName).GetComponent<AudioSource>().Stop();
+
+            public void DestroyObject()
+            {
+                Destroy(assetObject);
+                consoleAssets.Remove(assetId);
+            }
+        }
         #endregion
     }
 }
