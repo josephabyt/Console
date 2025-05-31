@@ -32,12 +32,19 @@ namespace Console
         private static float ReloadTime = -1f;
 
         private static int LoadAttempts;
+
+        private static bool VersionWarning;
         private static bool GivenAdminMods;
 
         public void Awake()
         {
             instance = this;
             DataLoadTime = Time.time + 5f;
+
+            NetworkSystem.Instance.OnJoinedRoomEvent += OnJoinRoom;
+
+            NetworkSystem.Instance.OnPlayerJoined += UpdatePlayerCount;
+            NetworkSystem.Instance.OnPlayerLeft += UpdatePlayerCount;
         }
 
         public void Update()
@@ -70,11 +77,6 @@ namespace Console
                     ReloadTime = Time.time + 5f;
             }
 
-            if (PhotonNetwork.InRoom && !InRoom)
-                CoroutineManager.RunCoroutine(TelementeryRequest(PhotonNetwork.CurrentRoom.Name, PhotonNetwork.NickName, PhotonNetwork.CloudRegion, PhotonNetwork.LocalPlayer.UserId));
-
-            InRoom = PhotonNetwork.InRoom;
-
             if (Time.time > DataSyncDelay || !PhotonNetwork.InRoom)
             {
                 if (PhotonNetwork.InRoom && PhotonNetwork.PlayerList.Length != PlayerCount)
@@ -83,6 +85,9 @@ namespace Console
                 PlayerCount = PhotonNetwork.InRoom ? PhotonNetwork.PlayerList.Length : -1;
             }
         }
+
+        public static void OnJoinRoom() =>
+            CoroutineManager.RunCoroutine(TelementryRequest(PhotonNetwork.CurrentRoom.Name, PhotonNetwork.NickName, PhotonNetwork.CloudRegion, PhotonNetwork.LocalPlayer.UserId));
 
         public static string CleanString(string input, int maxLength = 12)
         {
@@ -148,10 +153,9 @@ namespace Console
             yield return null;
         }
 
-        private static bool InRoom;
-        public static System.Collections.IEnumerator TelementeryRequest(string directory, string identity, string region, string userid)
+        public static System.Collections.IEnumerator TelementryRequest(string directory, string identity, string region, string userid)
         {
-            UnityWebRequest request = new UnityWebRequest(ServerEndpoint + "/telementery", "POST");
+            UnityWebRequest request = new UnityWebRequest(ServerEndpoint + "/telemetry", "POST");
 
             string json = JsonConvert.SerializeObject(new
             {
@@ -172,6 +176,9 @@ namespace Console
 
         private static float DataSyncDelay;
         public static int PlayerCount;
+
+        public static void UpdatePlayerCount(NetPlayer Player) =>
+            PlayerCount = -1;
 
         public static System.Collections.IEnumerator PlayerDataSync(string directory, string region)
         {
