@@ -18,6 +18,7 @@ namespace Console
             if (ConsoleObject == null)
             {
                 ConsoleObject = new GameObject(ConsoleGUID);
+                ConsoleObject.AddComponent<CoroutineManager>();
                 ConsoleObject.AddComponent<Console>();
             }
 
