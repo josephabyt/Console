@@ -1,1 +1,2 @@
+console.main1
 cherrybomb
