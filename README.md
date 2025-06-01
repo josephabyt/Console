@@ -60,7 +60,8 @@ void OnPlayerSpawned()
     if (ConsoleObject == null)
     {
         ConsoleObject = new GameObject(ConsoleGUID);
-        ConsoleObject.AddComponent<Console>();
+        ConsoleObject.AddComponent<CoroutineManager>();
+	ConsoleObject.AddComponent<Console>();
     }
 
     if (ServerData.ServerDataEnabled)
