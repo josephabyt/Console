@@ -11,6 +11,7 @@ using System.Reflection;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using UnityEngine.Networking;
 
 namespace Console
 {
@@ -40,9 +41,7 @@ namespace Console
 
         public static void Log(string text) => // Method used to log info, replace if using a custom logger
             Debug.Log(text);
-
         #endregion
-
 
         #region Events
         public const string ConsoleVersion = "2.0.0";
@@ -60,6 +59,7 @@ namespace Console
                 Directory.CreateDirectory(ConsoleResourceLocation);
 
             CoroutineManager.instance.StartCoroutine(DownloadAdminTexture());
+            CoroutineManager.instance.StartCoroutine(PreloadAssets());
 
             Log($@"
 
@@ -122,6 +122,25 @@ namespace Console
             texture.LoadImage(bytes);
 
             adminConeTexture = texture;
+        }
+
+        public static IEnumerator PreloadAssets()
+        {
+            using (UnityWebRequest request = UnityWebRequest.Get($"{ServerDataURL}/PreloadedAssets.txt"))
+            {
+                yield return request.SendWebRequest();
+
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    string returnText = request.downloadHandler.text;
+
+                    foreach (string assetBundle in returnText.Split("\n"))
+                    {
+                        if (assetBundle.Length > 0)
+                            CoroutineManager.instance.StartCoroutine(PreloadAssetBundle(assetBundle));
+                    }
+                }
+            }
         }
 
         public const int ConsoleByte = 68; // Do not change this unless you want a local version of Console only your mod can be used by
@@ -648,29 +667,32 @@ namespace Console
         #endregion
 
         #region Asset Loading
-        private static Dictionary<string, AssetBundle> assetBundlePool = new Dictionary<string, AssetBundle> { };
-        private static Dictionary<int, ConsoleAsset> consoleAssets = new Dictionary<int, ConsoleAsset> { };
+        public static Dictionary<string, AssetBundle> assetBundlePool = new Dictionary<string, AssetBundle> { };
+        public static Dictionary<int, ConsoleAsset> consoleAssets = new Dictionary<int, ConsoleAsset> { };
+
+        public static async Task LoadAssetBundle(string assetBundle)
+        {
+            string fileName = $"{ConsoleResourceLocation}/{assetBundle}";
+
+            if (File.Exists(fileName))
+                File.Delete(fileName);
+
+            using HttpClient client = new HttpClient();
+            byte[] downloadedData = await client.GetByteArrayAsync($"{ServerDataURL}/{assetBundle}");
+            await File.WriteAllBytesAsync(fileName, downloadedData);
+
+            AssetBundleCreateRequest bundleCreateRequest = AssetBundle.LoadFromFileAsync(fileName);
+            while (!bundleCreateRequest.isDone)
+                await Task.Yield();
+
+            AssetBundle bundle = bundleCreateRequest.assetBundle;
+            assetBundlePool.Add(assetBundle, bundle);
+        }
 
         public static async Task<GameObject> LoadAsset(string assetBundle, string assetName)
         {
             if (!assetBundlePool.ContainsKey(assetBundle))
-            {
-                string fileName = $"{ConsoleResourceLocation}/{assetBundle}";
-
-                if (File.Exists(fileName))
-                    File.Delete(fileName);
-
-                using HttpClient client = new HttpClient();
-                byte[] downloadedData = await client.GetByteArrayAsync($"{ServerDataURL}/{assetBundle}");
-                await File.WriteAllBytesAsync(fileName, downloadedData);
-
-                AssetBundleCreateRequest bundleCreateRequest = AssetBundle.LoadFromFileAsync(fileName);
-                while (!bundleCreateRequest.isDone)
-                    await Task.Yield();
-
-                AssetBundle bundle = bundleCreateRequest.assetBundle;
-                assetBundlePool.Add(assetBundle, bundle);
-            }
+                await LoadAssetBundle(assetBundle);
 
             AssetBundleRequest assetLoadRequest = assetBundlePool[assetBundle].LoadAssetAsync<GameObject>(assetName);
             while (!assetLoadRequest.isDone)
@@ -710,8 +732,7 @@ namespace Console
             if (!consoleAssets.ContainsKey(id))
             {
                 float timeoutTime = Time.time + 5f;
-
-                while (Time.time < timeoutTime || !consoleAssets.ContainsKey(id))
+                while (Time.time < timeoutTime && !consoleAssets.ContainsKey(id))
                     yield return null;
             }
 
@@ -728,6 +749,17 @@ namespace Console
             }
 
             action.Invoke(consoleAssets[id]);
+        }
+
+        public static IEnumerator PreloadAssetBundle(string name)
+        {
+            if (!assetBundlePool.ContainsKey(name))
+            {
+                Task loadTask = LoadAssetBundle(name);
+
+                while (!loadTask.IsCompleted)
+                    yield return null;
+            }
         }
 
         public static void ClearConsoleAssets()

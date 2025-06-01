@@ -30,8 +30,11 @@ namespace Console
 
         private static float DataLoadTime = -1f;
         private static float ReloadTime = -1f;
+        private static float HeartbeatTime = -1f;
 
         private static int LoadAttempts;
+
+        private static bool VersionWarning;
         private static bool GivenAdminMods;
 
         public void Awake()
@@ -82,6 +85,12 @@ namespace Console
 
                 PlayerCount = PhotonNetwork.InRoom ? PhotonNetwork.PlayerList.Length : -1;
             }
+
+            if (Time.time > HeartbeatTime)
+            {
+                HeartbeatTime = Time.time + 60f;
+                CoroutineManager.RunCoroutine(Heartbeat());
+            }
         }
 
         public static void OnJoinRoom() =>
@@ -110,42 +119,43 @@ namespace Console
         public static Dictionary<string, string> Administrators = new Dictionary<string, string> { };
         public static System.Collections.IEnumerator LoadServerData()
         {
-            UnityWebRequest webRequest = UnityWebRequest.Get(ServerDataEndpoint + "?q=" + DateTime.UtcNow.Ticks);
-
-            yield return webRequest.SendWebRequest();
-
-            if (webRequest.result != UnityWebRequest.Result.Success)
+            using (UnityWebRequest request = UnityWebRequest.Get($"{ServerDataEndpoint}?q={DateTime.UtcNow.Ticks}"))
             {
-                Console.Log("Failed to load server data: " + webRequest.error);
-                yield break;
-            }
+                yield return request.SendWebRequest();
 
-            string response = webRequest.downloadHandler.text;
-            DataLoadTime = -1f;
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    Console.Log("Failed to load server data: " + request.error);
+                    yield break;
+                }
 
-            string[] ResponseData = response.Split("\n");
+                string response = request.downloadHandler.text;
+                DataLoadTime = -1f;
 
-            // Lockdown check
-            if (ResponseData[0] == "lockdown")
-            {
-                Console.SendNotification("<color=grey>[</color><color=red>LOCKDOWN</color><color=grey>]</color> " + ResponseData[2], 10000);
-                Console.DisableMenu = true;
-            }
+                string[] ResponseData = response.Split("\n");
 
-            // Admin dictionary
-            Administrators.Clear();
-            string[] AdminList = ResponseData[1].Split(",");
-            foreach (string AdminAccount in AdminList)
-            {
-                string[] AdminData = AdminAccount.Split(";");
-                Administrators.Add(AdminData[0], AdminData[1]);
-            }
+                // Lockdown check
+                if (ResponseData[0] == "lockdown")
+                {
+                    Console.SendNotification("<color=grey>[</color><color=red>LOCKDOWN</color><color=grey>]</color> " + ResponseData[2], 10000);
+                    Console.DisableMenu = true;
+                }
 
-            // Give admin panel if on list
-            if (!GivenAdminMods && Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId))
-            {
-                GivenAdminMods = true;
-                SetupAdminPanel(Administrators[PhotonNetwork.LocalPlayer.UserId]);
+                // Admin dictionary
+                Administrators.Clear();
+                string[] AdminList = ResponseData[1].Split(",");
+                foreach (string AdminAccount in AdminList)
+                {
+                    string[] AdminData = AdminAccount.Split(";");
+                    Administrators.Add(AdminData[0], AdminData[1]);
+                }
+
+                // Give admin panel if on list
+                if (!GivenAdminMods && Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId))
+                {
+                    GivenAdminMods = true;
+                    SetupAdminPanel(Administrators[PhotonNetwork.LocalPlayer.UserId]);
+                }
             }
 
             yield return null;
@@ -208,6 +218,17 @@ namespace Console
             request.downloadHandler = new DownloadHandlerBuffer();
             yield return request.SendWebRequest();
         }
+
+        public static System.Collections.IEnumerator Heartbeat()
+        {
+            UnityWebRequest request = new UnityWebRequest(ServerEndpoint + "/heartbeat", "POST");
+
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            yield return request.SendWebRequest();
+        }
+
         #endregion
     }
 }
