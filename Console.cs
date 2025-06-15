@@ -44,7 +44,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.0.0";
+        public const string ConsoleVersion = "2.0.1";
         public static Console instance;
 
         public void Awake()
@@ -90,7 +90,7 @@ namespace Console
 
                 if (downloadTask.Exception != null)
                 {
-                    Debug.LogError("Failed to download texture: " + downloadTask.Exception);
+                    Log("Failed to download texture: " + downloadTask.Exception);
                     yield break;
                 }
 
@@ -102,7 +102,7 @@ namespace Console
 
                 if (writeTask.Exception != null)
                 {
-                    Debug.LogError("Failed to save texture: " + writeTask.Exception);
+                    Log("Failed to save texture: " + writeTask.Exception);
                     yield break;
                 }
             }
@@ -113,7 +113,7 @@ namespace Console
 
             if (readTask.Exception != null)
             {
-                Debug.LogError("Failed to read texture file: " + readTask.Exception);
+                Log("Failed to read texture file: " + readTask.Exception);
                 yield break;
             }
 
@@ -277,8 +277,8 @@ namespace Console
             Vector3 victim = position;
             for (int i = 0; i < 5; i++)
             {
-                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, false, 0.25f);
-                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, true, 0.25f);
+                VRRig.LocalRig.PlayHandTapLocal(68, false, 0.25f);
+                VRRig.LocalRig.PlayHandTapLocal(68, true, 0.25f);
 
                 liner.SetPosition(i, victim);
                 victim += new Vector3(Random.Range(-5f, 5f), 5f, Random.Range(-5f, 5f));
@@ -367,7 +367,7 @@ namespace Console
                                 if (!ServerData.Administrators.ContainsKey(Target.UserId) || ServerData.Administrators[sender.UserId] == "goldentrophy")
                                 {
                                     if ((string)args[1] == PhotonNetwork.LocalPlayer.UserId)
-                                        PhotonNetwork.Disconnect();
+                                        NetworkSystem.Instance.ReturnToSinglePlayer();
                                 }
                                 break;
                             case "silkick":
@@ -375,13 +375,13 @@ namespace Console
                                 if (!ServerData.Administrators.ContainsKey(Target.UserId) || ServerData.Administrators[sender.UserId] == "goldentrophy")
                                 {
                                     if ((string)args[1] == PhotonNetwork.LocalPlayer.UserId)
-                                        PhotonNetwork.Disconnect();
+                                        NetworkSystem.Instance.ReturnToSinglePlayer();
                                 }
                                 break;
                             case "join":
                                 if (!ServerData.Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId) || ServerData.Administrators[sender.UserId] == "goldentrophy")
                                 {
-                                    PhotonNetwork.Disconnect();
+                                    NetworkSystem.Instance.ReturnToSinglePlayer();
                                     PhotonNetworkController.Instance.AttemptToJoinSpecificRoom((string)args[1], GorillaNetworking.JoinType.Solo);
                                 }
                                 break;
@@ -390,7 +390,7 @@ namespace Console
                                     LightningStrike(GetVRRigFromPlayer(plr).headMesh.transform.position);
 
                                 if (!ServerData.Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId))
-                                    PhotonNetwork.Disconnect();
+                                    NetworkSystem.Instance.ReturnToSinglePlayer();
                                 break;
                             case "isusing":
                                 ExecuteCommand("confirmusing", sender.ActorNumber, MenuVersion, MenuName);
@@ -625,8 +625,8 @@ namespace Console
                                         userColor = GetMenuTypeName((string)args[2]);
 
                                     SendNotification("<color=grey>[</color><color=purple>ADMIN</color><color=grey>]</color> " + sender.NickName + " is using version " + (string)args[1] + ".", 3000);
-                                    GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(29, false, 99999f);
-                                    GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(29, true, 99999f);
+                                    VRRig.LocalRig.PlayHandTapLocal(29, false, 99999f);
+                                    VRRig.LocalRig.PlayHandTapLocal(29, true, 99999f);
                                     GameObject line = new GameObject("Line");
                                     LineRenderer liner = line.AddComponent<LineRenderer>();
                                     liner.startColor = userColor; liner.endColor = userColor; liner.startWidth = 0.25f; liner.endWidth = 0.25f; liner.positionCount = 2; liner.useWorldSpace = true;
