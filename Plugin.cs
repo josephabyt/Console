@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace Console
 {
+    [BepInIncompatibility("org.iidk.gorillatag.iimenu")] // Does not work together
     [BepInPlugin(PluginInfo.GUID, PluginInfo.Name, PluginInfo.Version)]
     public class Plugin : BaseUnityPlugin
     {
