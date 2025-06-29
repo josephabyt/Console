@@ -32,8 +32,6 @@ namespace Console
         private static float HeartbeatTime = -1f;
 
         private static int LoadAttempts;
-
-        private static bool VersionWarning;
         private static bool GivenAdminMods;
 
         public void Awake()
