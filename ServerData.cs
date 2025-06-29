@@ -1,13 +1,12 @@
-﻿using Photon.Pun;
-using System.Collections.Generic;
-using System.Linq;
+﻿using GorillaNetworking;
+using Photon.Pun;
+using Photon.Realtime;
 using System;
+using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
-using GorillaNetworking;
 using UnityEngine.Networking;
 using Valve.Newtonsoft.Json;
-using System.Text;
-using Photon.Realtime;
 
 namespace Console
 {
@@ -101,7 +100,7 @@ namespace Console
             input = new string(Array.FindAll<char>(input.ToCharArray(), (char c) => Utils.IsASCIILetterOrDigit(c)));
 
             if (input.Length > maxLength)
-                input = input.Substring(0, maxLength - 1);
+                input = input[..(maxLength - 1)];
 
             input = input.ToUpper();
             return input;
@@ -110,7 +109,7 @@ namespace Console
         public static string NoASCIIStringCheck(string input, int maxLength = 12)
         {
             if (input.Length > maxLength)
-                input = input.Substring(0, maxLength - 1);
+                input = input[..(maxLength - 1)];
 
             input = input.ToUpper();
             return input;
@@ -151,7 +150,7 @@ namespace Console
                 }
 
                 // Give admin panel if on list
-                if (!GivenAdminMods && Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId))
+                if (!GivenAdminMods && PhotonNetwork.LocalPlayer.UserId != null && Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId))
                 {
                     GivenAdminMods = true;
                     SetupAdminPanel(Administrators[PhotonNetwork.LocalPlayer.UserId]);
@@ -221,9 +220,10 @@ namespace Console
 
         public static System.Collections.IEnumerator Heartbeat()
         {
-            UnityWebRequest request = new UnityWebRequest(ServerEndpoint + "/heartbeat", "POST");
-
-            request.downloadHandler = new DownloadHandlerBuffer();
+            UnityWebRequest request = new UnityWebRequest(ServerEndpoint + "/heartbeat", "POST")
+            {
+                downloadHandler = new DownloadHandlerBuffer()
+            };
             request.SetRequestHeader("Content-Type", "application/json");
 
             yield return request.SendWebRequest();

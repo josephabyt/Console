@@ -1,17 +1,16 @@
 ﻿using ExitGames.Client.Photon;
+using GorillaNetworking;
 using Photon.Pun;
 using Photon.Realtime;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using UnityEngine.Rendering;
-using GorillaNetworking;
-using UnityEngine;
-using System.Reflection;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.Rendering;
 
 namespace Console
 {
@@ -23,7 +22,7 @@ namespace Console
 
         public static string ConsoleResourceLocation = "Console";
         public static string ConsoleIndicatorTextureURL =
-            "https://raw.githubusercontent.com/iiDk-the-actual/Console/refs/heads/master/ServerData/icon.png";
+            $"{ServerDataURL}/icon.png";
 
         public static bool DisableMenu;
 
@@ -44,7 +43,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.0.2";
+        public const string ConsoleVersion = "2.0.3";
         public static Console instance;
 
         public void Awake()
@@ -79,32 +78,33 @@ namespace Console
         public static IEnumerator DownloadAdminTexture()
         {
             string fileName = $"{ConsoleResourceLocation}/cone.png";
-            if (!File.Exists(fileName))
+
+            if (File.Exists(fileName))
+                File.Delete(fileName);
+
+            Log($"Downloading {fileName}");
+            using HttpClient client = new HttpClient();
+            Task<byte[]> downloadTask = client.GetByteArrayAsync(ConsoleIndicatorTextureURL);
+
+            while (!downloadTask.IsCompleted)
+                yield return null;
+
+            if (downloadTask.Exception != null)
             {
-                Log($"Downloading {fileName}");
-                using HttpClient client = new HttpClient();
-                Task<byte[]> downloadTask = client.GetByteArrayAsync(ConsoleIndicatorTextureURL);
+                Log("Failed to download texture: " + downloadTask.Exception);
+                yield break;
+            }
 
-                while (!downloadTask.IsCompleted)
-                    yield return null;
+            byte[] downloadedData = downloadTask.Result;
+            Task writeTask = File.WriteAllBytesAsync(fileName, downloadedData);
 
-                if (downloadTask.Exception != null)
-                {
-                    Log("Failed to download texture: " + downloadTask.Exception);
-                    yield break;
-                }
+            while (!writeTask.IsCompleted)
+                yield return null;
 
-                byte[] downloadedData = downloadTask.Result;
-                Task writeTask = File.WriteAllBytesAsync(fileName, downloadedData);
-
-                while (!writeTask.IsCompleted)
-                    yield return null;
-
-                if (writeTask.Exception != null)
-                {
-                    Log("Failed to save texture: " + writeTask.Exception);
-                    yield break;
-                }
+            if (writeTask.Exception != null)
+            {
+                Log("Failed to save texture: " + writeTask.Exception);
+                yield break;
             }
 
             Task<byte[]> readTask = File.ReadAllBytesAsync(fileName);
