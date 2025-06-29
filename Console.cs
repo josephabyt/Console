@@ -43,7 +43,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.0.3";
+        public const string ConsoleVersion = "2.0.4";
         public static Console instance;
 
         public void Awake()
