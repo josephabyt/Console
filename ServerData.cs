@@ -51,6 +51,8 @@ namespace Console
         {
             if (DataLoadTime > 0 && Time.time > DataLoadTime && GorillaComputer.instance.isConnectedToMaster)
             {
+                DataLoadTime = Time.time + 5f;
+
                 LoadAttempts++;
                 if (LoadAttempts >= 3)
                 {
