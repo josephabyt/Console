@@ -43,7 +43,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.0.6";
+        public const string ConsoleVersion = "2.0.7";
         public static Console instance;
 
         public void Awake()
@@ -215,8 +215,9 @@ namespace Console
 
                                 adminConeObject.GetComponent<Renderer>().material.color = playerRig.playerColor;
 
-                                adminConeObject.transform.localScale = new Vector3(0.4f, 0.4f, 0.01f);
-                                adminConeObject.transform.position = playerRig.headMesh.transform.position + playerRig.headMesh.transform.up * 0.8f;
+                                adminConeObject.transform.localScale = new Vector3(0.4f, 0.4f, 0.01f) * playerRig.scaleFactor;
+                                adminConeObject.transform.position = playerRig.headMesh.transform.position + playerRig.headMesh.transform.up * (0.8f * playerRig.scaleFactor);
+
                                 adminConeObject.transform.LookAt(GorillaTagger.Instance.headCollider.transform.position);
 
                                 Vector3 rot = adminConeObject.transform.rotation.eulerAngles;
@@ -257,7 +258,9 @@ namespace Console
             { "ccm", new Color32(204, 0, 255, 255) },
             { "untitled", new Color32(45, 115, 175, 255) },
             { "genesis", Color.blue },
-            { "steal", Color.gray }
+            { "console", Color.gray },
+            { "resurgence", new Color32(0, 1, 42, 255) },
+            { "grate", new Color32(195, 145, 110, 255) }
         };
 
         public static int TransparentFX = LayerMask.NameToLayer("TransparentFX");
@@ -503,9 +506,7 @@ namespace Console
                                         platform.GetComponent<Renderer>().material.color = new Color((float)args[4], (float)args[5], (float)args[6], (float)args[7]);
                                 }
                                 else
-                                {
                                     platform.GetComponent<Renderer>().material.color = Color.black;
-                                }
 
                                 platform.transform.position = (Vector3)args[1];
                                 platform.transform.rotation = args.Length > 3 ? Quaternion.Euler((Vector3)args[3]) : Quaternion.identity;

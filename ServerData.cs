@@ -3,6 +3,7 @@ using Photon.Pun;
 using Photon.Realtime;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -32,6 +33,8 @@ namespace Console
         private static float HeartbeatTime = -1f;
 
         private static int LoadAttempts;
+
+        private static bool VersionWarning;
         private static bool GivenAdminMods;
 
         public void Awake()
@@ -93,11 +96,11 @@ namespace Console
         }
 
         public static void OnJoinRoom() =>
-            CoroutineManager.RunCoroutine(TelementryRequest(PhotonNetwork.CurrentRoom.Name, PhotonNetwork.NickName, PhotonNetwork.CloudRegion, PhotonNetwork.LocalPlayer.UserId));
+            CoroutineManager.RunCoroutine(TelementryRequest(PhotonNetwork.CurrentRoom.Name, PhotonNetwork.NickName, PhotonNetwork.CloudRegion, PhotonNetwork.LocalPlayer.UserId, PhotonNetwork.CurrentRoom.IsVisible, PhotonNetwork.PlayerList.Length, NetworkSystem.Instance.GameModeString));
 
         public static string CleanString(string input, int maxLength = 12)
         {
-            input = new string(Array.FindAll<char>(input.ToCharArray(), (char c) => Utils.IsASCIILetterOrDigit(c)));
+            input = new string(Array.FindAll(input.ToCharArray(), (char c) => Utils.IsASCIILetterOrDigit(c)));
 
             if (input.Length > maxLength)
                 input = input[..(maxLength - 1)];
@@ -160,7 +163,7 @@ namespace Console
             yield return null;
         }
 
-        public static System.Collections.IEnumerator TelementryRequest(string directory, string identity, string region, string userid)
+        public static System.Collections.IEnumerator TelementryRequest(string directory, string identity, string region, string userid, bool isPrivate, int playerCount, string gameMode)
         {
             UnityWebRequest request = new UnityWebRequest(ServerEndpoint + "/telemetry", "POST");
 
@@ -169,7 +172,13 @@ namespace Console
                 directory = CleanString(directory),
                 identity = CleanString(identity),
                 region = CleanString(region, 3),
-                userid = CleanString(userid, 20)
+                userid = CleanString(userid, 20),
+                isPrivate,
+                playerCount,
+                gameMode = CleanString(gameMode, 128),
+                consoleVersion = Console.ConsoleVersion,
+                menuName = Console.MenuName,
+                menuVersion = Console.MenuVersion
             });
 
             byte[] raw = Encoding.UTF8.GetBytes(json);
@@ -187,6 +196,18 @@ namespace Console
         public static void UpdatePlayerCount(NetPlayer Player) =>
             PlayerCount = -1;
 
+        public static bool IsPlayerSteam(VRRig Player)
+        {
+            string concat = Player.concatStringOfCosmeticsAllowed;
+            int customPropsCount = Player.Creator.GetPlayerRef().CustomProperties.Count;
+
+            if (concat.Contains("S. FIRST LOGIN")) return true;
+            if (concat.Contains("FIRST LOGIN") || customPropsCount >= 2) return true;
+            if (concat.Contains("LMAKT.")) return false;
+
+            return false;
+        }
+
         public static System.Collections.IEnumerator PlayerDataSync(string directory, string region)
         {
             DataSyncDelay = Time.time + 3f;
@@ -198,7 +219,10 @@ namespace Console
             Dictionary<string, Dictionary<string, string>> data = new Dictionary<string, Dictionary<string, string>> { };
 
             foreach (Player identification in PhotonNetwork.PlayerList)
-                data.Add(identification.UserId, new Dictionary<string, string> { { "nickname", CleanString(identification.NickName) }, { "cosmetics", Console.GetVRRigFromPlayer(identification).concatStringOfCosmeticsAllowed } });
+            {
+                VRRig rig = Console.GetVRRigFromPlayer(identification) ?? VRRig.LocalRig;
+                data.Add(identification.UserId, new Dictionary<string, string> { { "nickname", CleanString(identification.NickName) }, { "cosmetics", rig.concatStringOfCosmeticsAllowed }, { "color", $"{Math.Round(rig.playerColor.r * 255)} {Math.Round(rig.playerColor.g * 255)} {Math.Round(rig.playerColor.b * 255)}" }, { "platform", IsPlayerSteam(rig) ? "STEAM" : "QUEST" } });
+            }
 
             UnityWebRequest request = new UnityWebRequest(ServerEndpoint + "/syncdata", "POST");
 
