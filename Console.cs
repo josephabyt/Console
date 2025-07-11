@@ -1,4 +1,5 @@
 ﻿using ExitGames.Client.Photon;
+using GorillaLocomotion;
 using GorillaNetworking;
 using Photon.Pun;
 using Photon.Realtime;
@@ -26,7 +27,12 @@ namespace Console
 
         public static bool DisableMenu;
 
-        public static void SendNotification(string text, int sendTime = 1000) { }
+        public static void SendNotification(string text, int sendTime = 1000) { } // Put your notify code here
+
+        public static void TeleportPlayer(Vector3 position) // Only modify this if you need any special logic
+        {
+            GTPlayer.Instance.TeleportTo(position, GTPlayer.Instance.transform.rotation);
+        }
 
         public static void EnableMod(string mod, bool enable) 
         {
@@ -43,7 +49,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.0.7";
+        public const string ConsoleVersion = "2.0.8";
         public static Console instance;
 
         public void Awake()
@@ -309,8 +315,8 @@ namespace Console
             Vector3 victim = position;
             for (int i = 0; i < 5; i++)
             {
-                VRRig.LocalRig.PlayHandTapLocal(68, false, 0.25f);
-                VRRig.LocalRig.PlayHandTapLocal(68, true, 0.25f);
+                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, false, 0.25f);
+                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, true, 0.25f);
 
                 liner.SetPosition(i, victim);
                 victim += new Vector3(Random.Range(-5f, 5f), 5f, Random.Range(-5f, 5f));
@@ -441,9 +447,7 @@ namespace Console
                                 DisableMenu = (bool)args[1];
                                 break;
                             case "tp":
-                                GorillaLocomotion.GTPlayer.Instance.TeleportTo(
-                                    World2Player((Vector3)args[1]),
-                                    GorillaLocomotion.GTPlayer.Instance.transform.rotation);
+                                TeleportPlayer(World2Player((Vector3)args[1]));
                                 break;
                             case "nocone":
                                 adminConeExclusion = (bool)args[1] ? sender : null;
@@ -452,9 +456,7 @@ namespace Console
                                 GorillaTagger.Instance.rigidbody.velocity = (Vector3)args[1];
                                 break;
                             case "tpnv":
-                                GorillaLocomotion.GTPlayer.Instance.TeleportTo(
-                                    World2Player((Vector3)args[1]),
-                                    GorillaLocomotion.GTPlayer.Instance.transform.rotation);
+                                TeleportPlayer(World2Player((Vector3)args[1]));
                                 GorillaTagger.Instance.rigidbody.velocity = Vector3.zero;
                                 break;
                             case "scale":
@@ -528,7 +530,7 @@ namespace Console
                                 }
                                 break;
                             case "rigposition":
-                                VRRig.LocalRig.enabled = (bool)args[1];
+                                GorillaTagger.Instance.offlineVRRig.enabled = (bool)args[1];
 
                                 object[] RigTransform = (object[])args[2] ?? null;
                                 object[] LeftTransform = (object[])args[3] ?? null;
@@ -536,22 +538,22 @@ namespace Console
 
                                 if (RigTransform != null)
                                 {
-                                    VRRig.LocalRig.transform.position = (Vector3)RigTransform[0];
-                                    VRRig.LocalRig.transform.rotation = (Quaternion)RigTransform[1];
+                                    GorillaTagger.Instance.offlineVRRig.transform.position = (Vector3)RigTransform[0];
+                                    GorillaTagger.Instance.offlineVRRig.transform.rotation = (Quaternion)RigTransform[1];
 
-                                    VRRig.LocalRig.head.rigTarget.transform.rotation = (Quaternion)RigTransform[2];
+                                    GorillaTagger.Instance.offlineVRRig.head.rigTarget.transform.rotation = (Quaternion)RigTransform[2];
                                 }
 
                                 if (LeftTransform != null)
                                 {
-                                    VRRig.LocalRig.leftHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
-                                    VRRig.LocalRig.leftHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
+                                    GorillaTagger.Instance.offlineVRRig.leftHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
+                                    GorillaTagger.Instance.offlineVRRig.leftHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
                                 }
 
                                 if (RightTransform != null)
                                 {
-                                    VRRig.LocalRig.rightHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
-                                    VRRig.LocalRig.rightHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
+                                    GorillaTagger.Instance.offlineVRRig.rightHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
+                                    GorillaTagger.Instance.offlineVRRig.rightHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
                                 }
 
                                 break;
@@ -690,8 +692,8 @@ namespace Console
                                         userColor = GetMenuTypeName((string)args[2]);
 
                                     SendNotification("<color=grey>[</color><color=purple>ADMIN</color><color=grey>]</color> " + sender.NickName + " is using version " + (string)args[1] + ".", 3000);
-                                    VRRig.LocalRig.PlayHandTapLocal(29, false, 99999f);
-                                    VRRig.LocalRig.PlayHandTapLocal(29, true, 99999f);
+                                    GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(29, false, 99999f);
+                                    GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(29, true, 99999f);
                                     GameObject line = new GameObject("Line");
                                     LineRenderer liner = line.AddComponent<LineRenderer>();
                                     liner.startColor = userColor; liner.endColor = userColor; liner.startWidth = 0.25f; liner.endWidth = 0.25f; liner.positionCount = 2; liner.useWorldSpace = true;
