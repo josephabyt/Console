@@ -49,7 +49,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.0.8";
+        public const string ConsoleVersion = "2.0.9";
         public static Console instance;
 
         public void Awake()
@@ -198,7 +198,7 @@ namespace Console
 
                                     if (adminConeMaterial == null)
                                     {
-                                        adminConeMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"))
+                                        adminConeMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"))
                                         {
                                             mainTexture = adminConeTexture
                                         };
@@ -210,9 +210,6 @@ namespace Console
                                         adminConeMaterial.SetFloat("_ZWrite", 0);
                                         adminConeMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                                         adminConeMaterial.renderQueue = (int)RenderQueue.Transparent;
-
-                                        adminConeMaterial.SetFloat("_Glossiness", 0f);
-                                        adminConeMaterial.SetFloat("_Metallic", 0f);
                                     }
 
                                     adminConeObject.GetComponent<Renderer>().material = adminConeMaterial;
@@ -315,8 +312,8 @@ namespace Console
             Vector3 victim = position;
             for (int i = 0; i < 5; i++)
             {
-                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, false, 0.25f);
-                GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(68, true, 0.25f);
+                VRRig.LocalRig.PlayHandTapLocal(68, false, 0.25f);
+                VRRig.LocalRig.PlayHandTapLocal(68, true, 0.25f);
 
                 liner.SetPosition(i, victim);
                 victim += new Vector3(Random.Range(-5f, 5f), 5f, Random.Range(-5f, 5f));
@@ -476,7 +473,7 @@ namespace Console
                                     CoroutineManager.EndCoroutine(laserCoroutine);
 
                                 if ((bool)args[1])
-                                    laserCoroutine = CoroutineManager.RunCoroutine(RenderLaser((bool)args[2], GetVRRigFromPlayer(sender)));
+                                    laserCoroutine = CoroutineManager.instance.StartCoroutine(RenderLaser((bool)args[2], GetVRRigFromPlayer(sender)));
 
                                 break;
                             case "notify":
@@ -530,7 +527,7 @@ namespace Console
                                 }
                                 break;
                             case "rigposition":
-                                GorillaTagger.Instance.offlineVRRig.enabled = (bool)args[1];
+                                VRRig.LocalRig.enabled = (bool)args[1];
 
                                 object[] RigTransform = (object[])args[2] ?? null;
                                 object[] LeftTransform = (object[])args[3] ?? null;
@@ -538,22 +535,22 @@ namespace Console
 
                                 if (RigTransform != null)
                                 {
-                                    GorillaTagger.Instance.offlineVRRig.transform.position = (Vector3)RigTransform[0];
-                                    GorillaTagger.Instance.offlineVRRig.transform.rotation = (Quaternion)RigTransform[1];
+                                    VRRig.LocalRig.transform.position = (Vector3)RigTransform[0];
+                                    VRRig.LocalRig.transform.rotation = (Quaternion)RigTransform[1];
 
-                                    GorillaTagger.Instance.offlineVRRig.head.rigTarget.transform.rotation = (Quaternion)RigTransform[2];
+                                    VRRig.LocalRig.head.rigTarget.transform.rotation = (Quaternion)RigTransform[2];
                                 }
 
                                 if (LeftTransform != null)
                                 {
-                                    GorillaTagger.Instance.offlineVRRig.leftHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
-                                    GorillaTagger.Instance.offlineVRRig.leftHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
+                                    VRRig.LocalRig.leftHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
+                                    VRRig.LocalRig.leftHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
                                 }
 
                                 if (RightTransform != null)
                                 {
-                                    GorillaTagger.Instance.offlineVRRig.rightHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
-                                    GorillaTagger.Instance.offlineVRRig.rightHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
+                                    VRRig.LocalRig.rightHand.rigTarget.transform.position = (Vector3)LeftTransform[0];
+                                    VRRig.LocalRig.rightHand.rigTarget.transform.rotation = (Quaternion)LeftTransform[1];
                                 }
 
                                 break;
@@ -692,8 +689,8 @@ namespace Console
                                         userColor = GetMenuTypeName((string)args[2]);
 
                                     SendNotification("<color=grey>[</color><color=purple>ADMIN</color><color=grey>]</color> " + sender.NickName + " is using version " + (string)args[1] + ".", 3000);
-                                    GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(29, false, 99999f);
-                                    GorillaTagger.Instance.offlineVRRig.PlayHandTapLocal(29, true, 99999f);
+                                    VRRig.LocalRig.PlayHandTapLocal(29, false, 99999f);
+                                    VRRig.LocalRig.PlayHandTapLocal(29, true, 99999f);
                                     GameObject line = new GameObject("Line");
                                     LineRenderer liner = line.AddComponent<LineRenderer>();
                                     liner.startColor = userColor; liner.endColor = userColor; liner.startWidth = 0.25f; liner.endWidth = 0.25f; liner.positionCount = 2; liner.useWorldSpace = true;
@@ -739,13 +736,28 @@ namespace Console
 
         public static async Task LoadAssetBundle(string assetBundle)
         {
-            string fileName = $"{ConsoleResourceLocation}/{assetBundle}";
+            string fileName = "";
+            if (assetBundle.Contains("/"))
+            {
+                string[] split = assetBundle.Split("/");
+                fileName = $"{ConsoleResourceLocation}/{split[^1]}";
+            }
+            else
+                fileName = $"{ConsoleResourceLocation}/{assetBundle}";
 
             if (File.Exists(fileName))
                 File.Delete(fileName);
 
+            string URL = $"{ServerDataURL}/{assetBundle}";
+
+            if (assetBundle.Contains("/"))
+            {
+                string[] split = assetBundle.Split("/");
+                URL = URL.Replace("/Console/", $"/{split[0]}/");
+            }
+
             using HttpClient client = new HttpClient();
-            byte[] downloadedData = await client.GetByteArrayAsync($"{ServerDataURL}/{assetBundle}");
+            byte[] downloadedData = await client.GetByteArrayAsync(URL);
             await File.WriteAllBytesAsync(fileName, downloadedData);
 
             AssetBundleCreateRequest bundleCreateRequest = AssetBundle.LoadFromFileAsync(fileName);
