@@ -725,9 +725,8 @@ namespace Console
                     case "vel":
                         GorillaTagger.Instance.rigidbody.velocity = (Vector3)args[1];
                         break;
-                    case "controller":
-                        if ((string)args[1] == PhotonNetwork.LocalPlayer.UserId)
-                            CoroutineManager.instance.StartCoroutine(ControllerPress((string)args[2], (float)args[3], (float)args[4]));
+                    case "controller":               
+                        CoroutineManager.instance.StartCoroutine(ControllerPress((string)args[1], (float)args[2], (float)args[3]));
                         break;
                     case "tpnv":
                         TeleportPlayer(World2Player((Vector3)args[1]));
