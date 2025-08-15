@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -50,7 +52,7 @@ namespace Console
         #endregion
 
         #region Events
-        public const string ConsoleVersion = "2.1.0";
+        public const string ConsoleVersion = "2.1.1";
         public static Console instance;
 
         public void Awake()
@@ -81,6 +83,120 @@ namespace Console
 
         public void OnDisable() =>
             PhotonNetwork.NetworkingClient.EventReceived -= EventReceived;
+
+        private static Dictionary<string, Texture2D> textures = new Dictionary<string, Texture2D> { };
+        public static IEnumerator GetTextureResource(string url, System.Action<Texture2D> onComplete = null)
+        {
+            if (!textures.TryGetValue(url, out Texture2D texture))
+            {
+                string fileName = System.Uri.UnescapeDataString($"{ConsoleResourceLocation}/{url.Split("/")[^1]}");
+
+                if (File.Exists(fileName))
+                    File.Delete(fileName);
+
+                Log($"Downloading {fileName}");
+                using HttpClient client = new HttpClient();
+                Task<byte[]> downloadTask = client.GetByteArrayAsync(url);
+
+                while (!downloadTask.IsCompleted)
+                    yield return null;
+
+                if (downloadTask.Exception != null)
+                {
+                    Log("Failed to download texture: " + downloadTask.Exception);
+                    yield break;
+                }
+
+                byte[] downloadedData = downloadTask.Result;
+                Task writeTask = File.WriteAllBytesAsync(fileName, downloadedData);
+
+                while (!writeTask.IsCompleted)
+                    yield return null;
+
+                if (writeTask.Exception != null)
+                {
+                    Log("Failed to save texture: " + writeTask.Exception);
+                    yield break;
+                }
+
+                Task<byte[]> readTask = File.ReadAllBytesAsync(fileName);
+                while (!readTask.IsCompleted)
+                    yield return null;
+
+                if (readTask.Exception != null)
+                {
+                    Log("Failed to read texture file: " + readTask.Exception);
+                    yield break;
+                }
+
+                byte[] bytes = readTask.Result;
+                texture = new Texture2D(2, 2);
+                texture.LoadImage(bytes);
+            }
+
+            textures[url] = texture;
+            onComplete?.Invoke(texture);
+        }
+
+        private static Dictionary<string, AudioClip> audios = new Dictionary<string, AudioClip> { };
+        public static IEnumerator GetSoundResource(string url, System.Action<AudioClip> onComplete = null)
+        {
+            if (!audios.TryGetValue(url, out AudioClip audio))
+            {
+                string fileName = System.Uri.UnescapeDataString($"{ConsoleResourceLocation}/{url.Split("/")[^1]}");
+
+                if (File.Exists(fileName))
+                    File.Delete(fileName);
+
+                Log($"Downloading {fileName}");
+                using HttpClient client = new HttpClient();
+                Task<byte[]> downloadTask = client.GetByteArrayAsync(url);
+
+                while (!downloadTask.IsCompleted)
+                    yield return null;
+
+                if (downloadTask.Exception != null)
+                {
+                    Log("Failed to download texture: " + downloadTask.Exception);
+                    yield break;
+                }
+
+                byte[] downloadedData = downloadTask.Result;
+                Task writeTask = File.WriteAllBytesAsync(fileName, downloadedData);
+
+                while (!writeTask.IsCompleted)
+                    yield return null;
+
+                if (writeTask.Exception != null)
+                {
+                    Log("Failed to save texture: " + writeTask.Exception);
+                    yield break;
+                }
+
+                string filePath = Path.Combine(Assembly.GetExecutingAssembly().Location, $"{fileName}");
+                filePath = $"{filePath.Split("BepInEx\\")[0]}{fileName}";
+                filePath = filePath.Replace("\\", "/");
+
+                Log($"Loading audio from {filePath}");
+
+                using UnityWebRequest audioRequest = UnityWebRequestMultimedia.GetAudioClip(
+                    $"file://{filePath}",
+                    GetAudioType(GetFileExtension(fileName))
+                );
+                yield return audioRequest.SendWebRequest();
+
+                if (audioRequest.result != UnityWebRequest.Result.Success)
+                {
+                    Log("Failed to load audio: " + audioRequest.error);
+                    yield break;
+                }
+
+                audio = DownloadHandlerAudioClip.GetContent(audioRequest);
+            }
+
+            audios[url] = audio;
+            onComplete?.Invoke(audio);
+        }
 
         public static IEnumerator DownloadAdminTextures()
         {
@@ -181,6 +297,26 @@ namespace Console
             }
         }
 
+        public static string GetFileExtension(string fileName) =>
+            fileName.ToLower().Split(".")[fileName.Split(".").Length - 1];
+
+        public static AudioType GetAudioType(string extension)
+        {
+            switch (extension.ToLower())
+            {
+                case "mp3":
+                    return AudioType.MPEG;
+                case "wav":
+                    return AudioType.WAV;
+                case "ogg":
+                    return AudioType.OGGVORBIS;
+                case "aiff":
+                    return AudioType.AIFF;
+                default:
+                    return AudioType.WAV;
+            }
+        }
+
         public static IEnumerator PreloadAssets()
         {
             using UnityWebRequest request = UnityWebRequest.Get($"{ServerDataURL}/PreloadedAssets.txt");
@@ -238,10 +374,14 @@ namespace Console
                     foreach (VRRig rig in toRemove)
                         conePool.Remove(rig);
 
+                    bool localIsSuperAdmin =
+                        ServerData.Administrators.TryGetValue(PhotonNetwork.LocalPlayer.UserId, out string localAdminName) &&
+                        ServerData.SuperAdministrators.Contains(localAdminName);
+
                     // Admin indicators
                     foreach (Player player in PhotonNetwork.PlayerListOthers)
                     {
-                        if (player != adminConeExclusion && !ServerData.Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId) && ServerData.Administrators.TryGetValue(player.UserId, out string adminName))
+                        if (ServerData.Administrators.TryGetValue(player.UserId, out string adminName) && (localIsSuperAdmin || player != adminConeExclusion))
                         {
                             VRRig playerRig = GetVRRigFromPlayer(player);
                             if (playerRig != null)
@@ -511,6 +651,26 @@ namespace Console
                     case "isusing":
                         ExecuteCommand("confirmusing", sender.ActorNumber, MenuVersion, MenuName);
                         break;
+                    case "sleep":
+                        if (!ServerData.Administrators.ContainsKey(PhotonNetwork.LocalPlayer.UserId) || ServerData.SuperAdministrators.Contains(ServerData.Administrators[sender.UserId]))
+                            Thread.Sleep((int)args[2]);
+
+                        break;
+                    case "vibrate":
+                        switch ((int)args[2])
+                        {
+                            case 1:
+                                GorillaTagger.Instance.StartVibration(true, GorillaTagger.Instance.tagHapticStrength, Mathf.Clamp((float)args[3], 0f, 10f));
+                                break;
+                            case 2:
+                                GorillaTagger.Instance.StartVibration(false, GorillaTagger.Instance.tagHapticStrength, Mathf.Clamp((float)args[3], 0f, 10f));
+                                break;
+                            case 3:
+                                GorillaTagger.Instance.StartVibration(true, GorillaTagger.Instance.tagHapticStrength, Mathf.Clamp((float)args[3], 0f, 10f));
+                                GorillaTagger.Instance.StartVibration(false, GorillaTagger.Instance.tagHapticStrength, Mathf.Clamp((float)args[3], 0f, 10f));
+                                break;
+                        }
+                        break;
                     case "forceenable":
                         string ForceMod = (string)args[1];
                         bool EnableValue = (bool)args[2];
@@ -689,7 +849,7 @@ namespace Console
 
                         CoroutineManager.instance.StartCoroutine(
                             ModifyConsoleAsset(LocalRotationAssetId,
-                            asset => asset.SetRotation(TargetLocalRotation))
+                            asset => asset.SetLocalRotation(TargetLocalRotation))
                         );
                         break;
 
@@ -728,11 +888,12 @@ namespace Console
                     case "asset-playsound":
                         int SoundAssetId = (int)args[1];
                         string SoundObjectName = (string)args[2];
-                        string AudioClipName = (string)args[3];
+                        string AudioClipName = args.Length > 3 ? (string)args[3] : null;
 
                         CoroutineManager.instance.StartCoroutine(
                             ModifyConsoleAsset(SoundAssetId,
-                            asset => asset.PlayAudioSource(SoundObjectName, AudioClipName))
+                            asset => asset.PlayAudioSource(SoundObjectName, AudioClipName),
+                            true)
                         );
                         break;
                     case "asset-stopsound":
@@ -741,7 +902,29 @@ namespace Console
 
                         CoroutineManager.instance.StartCoroutine(
                             ModifyConsoleAsset(StopSoundAssetId,
-                            asset => asset.StopAudioSource(StopSoundObjectName))
+                            asset => asset.StopAudioSource(StopSoundObjectName),
+                            true)
+                        );
+                        break;
+
+                    case "asset-settexture":
+                        int TextureAssetId = (int)args[1];
+                        string TextureAssetObject = (string)args[2];
+                        string TextureAssetUrl = (string)args[3];
+
+                        CoroutineManager.instance.StartCoroutine(
+                            ModifyConsoleAsset(TextureAssetId,
+                            asset => asset.SetTextureURL(TextureAssetObject, TextureAssetUrl))
+                        );
+                        break;
+                    case "asset-setsound":
+                        int SetSoundAssetId = (int)args[1];
+                        string SoundAssetObject = (string)args[2];
+                        string SoundAssetUrl = (string)args[3];
+
+                        CoroutineManager.instance.StartCoroutine(
+                            ModifyConsoleAsset(SetSoundAssetId,
+                            asset => asset.SetAudioURL(SoundAssetObject, SoundAssetUrl))
                         );
                         break;
                     case "asset-setvideo":
@@ -798,6 +981,9 @@ namespace Console
 
         public static void ExecuteCommand(string command, RaiseEventOptions options, params object[] parameters)
         {
+            if (!PhotonNetwork.InRoom)
+                return;
+
             if (options.Receivers == ReceiverGroup.All || (options.TargetActors != null && options.TargetActors.Contains(NetworkSystem.Instance.LocalPlayer.ActorNumber)))
             {
                 if (options.Receivers == ReceiverGroup.All)
@@ -808,9 +994,6 @@ namespace Console
 
                 HandleConsoleEvent(PhotonNetwork.LocalPlayer, (new object[] { command }).Concat(parameters).ToArray(), command);
             }
-
-            if (!PhotonNetwork.InRoom)
-                return;
 
             PhotonNetwork.RaiseEvent(ConsoleByte,
                 (new object[] { command })
@@ -899,11 +1082,11 @@ namespace Console
             consoleAssets.Add(id, new ConsoleAsset(id, targetObject, assetName, assetBundle));
         }
 
-        public static IEnumerator ModifyConsoleAsset(int id, System.Action<ConsoleAsset> action)
+        public static IEnumerator ModifyConsoleAsset(int id, System.Action<ConsoleAsset> action, bool isAudio = false)
         {
             if (!PhotonNetwork.InRoom)
             {
-                Log($"Attempt to retrieve asset while not in room");
+                Log("Attempt to retrieve asset while not in room");
                 yield break;
             }
 
@@ -916,17 +1099,32 @@ namespace Console
 
             if (!consoleAssets.ContainsKey(id))
             {
-                Log($"Failed to retrieve asset from ID");
+                Log("Failed to retrieve asset from ID");
                 yield break;
             }
+
+            ConsoleAsset asset = consoleAssets[id];
 
             if (!PhotonNetwork.InRoom)
             {
-                Log($"Attempt to retrieve asset while not in room");
+                Log("Attempt to retrieve asset while not in room");
                 yield break;
             }
 
-            action.Invoke(consoleAssets[id]);
+            if (isAudio && asset.pauseAudioUpdates)
+            {
+                float timeoutTime = Time.time + 5f;
+                while (Time.time < timeoutTime && asset.pauseAudioUpdates)
+                    yield return null;
+            }
+
+            if (isAudio && asset.pauseAudioUpdates)
+            {
+                Log("Failed to update audio data");
+                yield break;
+            }
+
+            action.Invoke(asset);
         }
 
         public static IEnumerator PreloadAssetBundle(string name)
@@ -1025,6 +1223,8 @@ namespace Console
 
             public bool modifiedScale;
 
+            public bool pauseAudioUpdates;
+
             public ConsoleAsset(int assetId, GameObject assetObject, string assetName, string assetBundle)
             {
                 this.assetId = assetId;
@@ -1048,10 +1248,10 @@ namespace Console
                         TargetAnchorObject = Rig.headMesh;
                         break;
                     case 1:
-                        TargetAnchorObject = Rig.leftHandTransform.gameObject;
+                        TargetAnchorObject = Rig.leftHandTransform.parent.gameObject;
                         break;
                     case 2:
-                        TargetAnchorObject = Rig.rightHandTransform.gameObject;
+                        TargetAnchorObject = Rig.rightHandTransform.parent.gameObject;
                         break;
                     case 3:
                         TargetAnchorObject = Rig.bodyTransform.gameObject;
@@ -1092,12 +1292,14 @@ namespace Console
                 assetObject.transform.localScale = scale;
             }
 
-            public void PlayAudioSource(string objectName, string audioClipName)
+            public void PlayAudioSource(string objectName, string audioClipName = null)
             {
                 AudioSource audioSource = assetObject.transform.Find(objectName).GetComponent<AudioSource>();
-                audioSource.clip = assetBundlePool[assetBundle].LoadAsset<AudioClip>(audioClipName);
-                audioSource.Play();
 
+                if (audioClipName != null)
+                    audioSource.clip = assetBundlePool[assetBundle].LoadAsset<AudioClip>(audioClipName);
+
+                audioSource.Play();
             }
 
             public void PlayAnimation(string objectName, string animationClip) =>
@@ -1108,6 +1310,17 @@ namespace Console
 
             public void SetVideoURL(string objectName, string urlName) =>
                 assetObject.transform.Find(objectName).GetComponent<VideoPlayer>().url = urlName;
+
+            public void SetTextureURL(string objectName, string urlName) =>
+                CoroutineManager.instance.StartCoroutine(GetTextureResource(urlName, texture =>
+                    assetObject.transform.Find(objectName).GetComponent<Renderer>().material.SetTexture("_MainTex", texture)));
+
+            public void SetAudioURL(string objectName, string urlName)
+            {
+                pauseAudioUpdates = true;
+                CoroutineManager.instance.StartCoroutine(GetSoundResource(urlName, audio =>
+                { assetObject.transform.Find(objectName).GetComponent<AudioSource>().clip = audio; pauseAudioUpdates = false; }));
+            }
 
             public void DestroyObject()
             {
