@@ -1,6 +1,7 @@
 ﻿<p align="center">
   <a href="#"><img src="https://i.imgur.com/INWslSU.png"></a>
 </p>
+Looking for artists that I can pay to get an actual logo from. Contact me on Discord: @crimsoncauldron
 
 ---
 
