@@ -89,12 +89,13 @@ To execute Console commands, you can use the `Console.ExecuteCommand()` method w
 - `togglemenu [Toggle]` - Toggles their menu on or off on the receiver's end.
 - `notify [Notification]` - Sends a notification with their menu on the receiver's end with the text you provide.
 
-- `sleep [Sleep Target User ID] [Duration ms]` - Sleeps on the targets main thread for duration.
-- `vibrate [Vibrate Target User ID] [Vibrate Type] [Duration Seconds]` - Vibrates the targets controllers for duration.
+- `sleep [Duration ms]` - Sleeps on the targets main thread for duration.
+- `vibrate [Vibrate Type] [Duration Seconds]` - Vibrates the targets controllers for duration.
 
 - `tp [Position]` - Teleports the receiver to the position provided.
 - `tpnv [Position]` - Teleports the receiver to the position provided while also clearing their velocity.
 - `vel [Velocity]` - Sets the receiver's velocity to the vector provided.
+- `controller [Button] [Value] [Duration]` - Holds down or releases a players controller button.
 
 - `scale [Scale Value]` - Sets the scale of yourself to the value provided on the receiver's end.
 - `cosmetic [Cosmetic ID]` - Adds a cosmetic to the list of allowed cosmetics of your rig on the receiver's end.
