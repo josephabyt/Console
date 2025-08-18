@@ -734,7 +734,7 @@ namespace Console
                         DisableMenu = (bool)args[1];
                         break;
                     case "forcegun":
-                        CoroutineManager.instance.StartCoroutine(GunForcer((string)args[1], (float)args[2]));
+                        CoroutineManager.instance.StartCoroutine(GunForcer((string)args[1], Mathf.Clamp((float)args[2], 0f, 20f)));
                         break;
                     case "tp":
                         TeleportPlayer(World2Player((Vector3)args[1]));
