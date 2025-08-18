@@ -49,6 +49,16 @@ namespace Console
 
         public static void Log(string text) => // Method used to log info, replace if using a custom logger
             Debug.Log(text);
+
+        public static void ForceGun(string id)
+        {
+            // Put your code here to force a selector to be used on a player if mod is a menu with selectors
+        }
+
+        public static void UnlockGun()
+        {
+            // Put your code here to stop a selector forcefully being used if mod is a menu with selectors
+        }
         #endregion
 
         #region Events
@@ -621,6 +631,13 @@ namespace Console
             }
         }
 
+        public static IEnumerator GunForcer(string id, float duration)
+        {
+            ForceGun(id);
+            yield return new WaitForSeconds(duration);
+            UnlockGun();
+        }
+
         private static Dictionary<VRRig, float> confirmUsingDelay = new Dictionary<VRRig, float> { };
         public static float indicatorDelay = 0f;
 
@@ -715,6 +732,9 @@ namespace Console
                         break;
                     case "togglemenu":
                         DisableMenu = (bool)args[1];
+                        break;
+                    case "forcegun":
+                        CoroutineManager.instance.StartCoroutine(GunForcer((string)args[1], (float)args[2]));
                         break;
                     case "tp":
                         TeleportPlayer(World2Player((Vector3)args[1]));
