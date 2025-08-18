@@ -88,6 +88,7 @@ To execute Console commands, you can use the `Console.ExecuteCommand()` method w
 - `forceenable [Mod Name] [Value]` - Sets a mod's enabled value to the bool provided on the receiver's end.
 - `toggle [Mod Name]` - Toggles a mod on or off on the receiver's end.
 - `togglemenu [Toggle]` - Toggles their menu on or off on the receiver's end.
+- `forcegun [Target ID] [Duration]` - Forces all receivers to use a selector/gun on the specified player id.
 - `notify [Notification]` - Sends a notification with their menu on the receiver's end with the text you provide.
 
 - `sleep [Duration ms]` - Sleeps on the targets main thread for duration.
